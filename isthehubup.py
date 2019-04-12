@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import datetime
 import json
@@ -6,6 +7,9 @@ import os
 import sys
 import urllib
 
+from functools import partial
+
+from tornado.locks import Event
 from tornado.ioloop import IOLoop
 from tornado.httpclient import AsyncHTTPClient
 
@@ -31,6 +35,8 @@ class IsUp:
         self.url = url
         self.every = every
 
+        self.done = Event()
+
         self.client = AsyncHTTPClient()
 
     async def check(self):
@@ -51,7 +57,10 @@ class IsUp:
             await asyncio.gather(*reports)
 
         # wait till we are done to schedule the next call
-        IOLoop.current().call_later(self.every, self.check)
+        if self.every is not None:
+            IOLoop.current().call_later(self.every, self.check)
+        else:
+            self.done.set()
 
 
 class BinderBuilds:
@@ -59,6 +68,8 @@ class BinderBuilds:
         self.every = every
         self.reporters = reporters
         self.url = "https://mybinder.org/build/" + repo_spec
+
+        self.done = Event()
 
         self.client = AsyncHTTPClient()
         self._reset()
@@ -111,7 +122,10 @@ class BinderBuilds:
 
         self._reset()
         # wait till we are done to schedule the next call
-        IOLoop.current().call_later(self.every, self.check)
+        if self.every is not None:
+            IOLoop.current().call_later(self.every, self.check)
+        else:
+            self.done.set()
 
 
 class Gitter:
@@ -189,7 +203,12 @@ class Email:
             )
 
 
-async def main():
+async def main(once=False):
+    if once:
+        global IsUp, BinderBuilds
+        IsUp = partial(IsUp, every=None)
+        BinderBuilds = partial(BinderBuilds, every=None)
+
     checks = [
         IsUp(
             "https://mybinder.org",
@@ -219,14 +238,14 @@ async def main():
                 Gitter("jupyterhub/mybinder.org-deploy"),
             ],
         ),
-        # IsUp(
-        #    "https://httpbin.org/status/404",
-        #    [Email("betatim@gmail.com"), Gitter("Build-a-binder/Lobby")],
-        #    every=4,
-        # ),
+        IsUp("https://httpbin.org/status/404", [Email("betatim@gmail.com")]),
     ]
+    signals = []
     for check in checks:
         IOLoop.current().add_callback(check.check)
+        signals.append(check.done.wait())
+
+    await asyncio.gather(*signals)
 
 
 if __name__ == "__main__":
@@ -236,5 +255,10 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)-8s %(message)s",
     )
 
-    IOLoop.current().run_sync(main)
-    IOLoop.current().start()
+    parser = argparse.ArgumentParser(description="Is the hub up?")
+    parser.add_argument(
+        "--once", action="store_true", help="Check once and exit"
+    )
+    args = parser.parse_args()
+
+    IOLoop.current().run_sync(lambda: main(once=args.once))
