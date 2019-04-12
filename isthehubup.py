@@ -167,7 +167,7 @@ class Gitter:
             self.client.fetch(
                 f"https://api.gitter.im/v1/rooms/{channel_id}/chatMessages",
                 method="POST",
-                body=json.dumps({"text": f"is {url} down?"}),
+                body=json.dumps({"text": f"From Tim's https://isthehubup.herokuapp.com/ bot: is {url} down?"}),
                 headers=headers,
             )
 
@@ -248,7 +248,7 @@ async def main(once=False):
                 Gitter("jupyterhub/mybinder.org-deploy"),
             ],
         ),
-        IsUp("https://httpbin.org/status/404", [Email("betatim@gmail.com")]),
+        #IsUp("https://httpbin.org/status/404", [Email("betatim@gmail.com")]),
     ]
     signals = []
     for check in checks:
