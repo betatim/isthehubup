@@ -203,6 +203,16 @@ class Email:
             )
 
 
+class LogIt:
+    def __init__(self):
+        self.url = None
+
+    async def report(self, url, message):
+        self.at = datetime.datetime.utcnow()
+        self.url = url
+        self.message = message
+
+
 async def main(once=False):
     if once:
         global IsUp, BinderBuilds
