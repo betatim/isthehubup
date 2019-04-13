@@ -35,6 +35,10 @@ class MainHandler(tornado.web.RequestHandler):
             self.write(logit.message)
             self.write("</p>")
 
+        self.write("<p>")
+        self.write('Freshly made with <a href="https://github.com/betatim/isthehubup">open-source</a> 🌈')
+        self.write("</p>")
+
         self.write("</p>")
         self.write("""
                 <script>
