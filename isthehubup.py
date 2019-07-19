@@ -12,14 +12,15 @@ from functools import partial
 from tornado.locks import Event
 from tornado.ioloop import IOLoop
 from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import HTTPClientError
 
 
-MG_API_KEY = os.getenv("MG_API_KEY", None)
+MG_API_KEY = os.getenv("MG_API_KEY", "None")
 if MG_API_KEY is None:
     print("Set the MG_API_KEY environment variable.")
     sys.exit(1)
 
-GITTER_API_KEY = os.getenv("GITTER_API_KEY", None)
+GITTER_API_KEY = os.getenv("GITTER_API_KEY", "None")
 if GITTER_API_KEY is None:
     print("Set the GITTER_API_KEY environment variable.")
     sys.exit(1)
@@ -64,10 +65,12 @@ class IsUp:
 
 
 class BinderBuilds:
-    def __init__(self, repo_spec, reporters, every=600):
+    def __init__(
+        self, repo_spec, reporters, every=600, host="https://mybinder.org"
+    ):
         self.every = every
         self.reporters = reporters
-        self.url = "https://mybinder.org/build/" + repo_spec
+        self.url = host + "/build/" + repo_spec
 
         self.done = Event()
 
@@ -100,25 +103,32 @@ class BinderBuilds:
 
     async def check(self):
         logging.info("Does %s launch?" % self.url)
-        r = await self.client.fetch(
-            self.url,
-            raise_error=False,
-            streaming_callback=self._buffer,
-            request_timeout=3000,
-        )
+        try:
+            r = await self.client.fetch(
+                self.url,
+                raise_error=False,
+                streaming_callback=self._buffer,
+                request_timeout=60 * 5,
+            )
 
-        if r.code >= 400 or self._phase != "ready":
-            logging.warning(f"Launching {self.url} failed with a {r.code}.")
-
-            reports = [
-                reporter.report(self.url, self._log_lines)
-                for reporter in self.reporters
-            ]
-
-            await asyncio.gather(*reports)
+        except HTTPClientError as e:
+            logging.warning(f"Launching {self.url} failed with a {e}.")
 
         else:
-            logging.info(f"Launching {self.url} took {r.request_time}s.")
+            if r.code >= 400 or self._phase != "ready":
+                logging.warning(
+                    f"Launching {self.url} failed with a {r.code} exception."
+                )
+
+                reports = [
+                    reporter.report(self.url, self._log_lines)
+                    for reporter in self.reporters
+                ]
+
+                await asyncio.gather(*reports)
+
+            else:
+                logging.info(f"Launching {self.url} took {r.request_time}s.")
 
         self._reset()
         # wait till we are done to schedule the next call
@@ -130,8 +140,15 @@ class BinderBuilds:
 
 class Gitter:
     def __init__(self, channel, at_most_every=600):
+        self._state_file = ".hub_up_gitter_report"
+
         self.at_most_every = timedelta(at_most_every)
         self._last_report = datetime.datetime.utcnow() - self.at_most_every
+        if os.path.exists(self._state_file):
+            with open(self._state_file) as f:
+                line = f.read()
+                if line:
+                    self._last_report = datetime.datetime.fromisoformat(line)
 
         self.channel = channel
 
@@ -167,9 +184,22 @@ class Gitter:
             self.client.fetch(
                 f"https://api.gitter.im/v1/rooms/{channel_id}/chatMessages",
                 method="POST",
-                body=json.dumps({"text": f"From Tim's https://isthehubup.herokuapp.com/ bot: is {url} down?"}),
+                body=json.dumps(
+                    {
+                        "text": f"From Tim's https://isthehubup.herokuapp.com/ bot: is {url} down?"
+                    }
+                ),
                 headers=headers,
             )
+            self.client.fetch(
+                f"https://api.gitter.im/v1/rooms/{channel_id}/chatMessages",
+                method="POST",
+                body=json.dumps({"text": f"{message}"}),
+                headers=headers,
+            )
+
+            with open(self._state_file, "w") as f:
+                f.write(str(self._last_report))
 
 
 class Email:
@@ -248,8 +278,25 @@ async def main(once=False):
                 Gitter("jupyterhub/mybinder.org-deploy"),
             ],
         ),
-        #IsUp("https://httpbin.org/status/404", [Email("betatim@gmail.com")]),
+        BinderBuilds(
+            "gh/binder-examples/requirements/master",
+            [
+                Email("betatim@gmail.com"),
+                Gitter("jupyterhub/mybinder.org-deploy"),
+            ],
+            host="https://gke.mybinder.org",
+        ),
+        BinderBuilds(
+            "gh/binder-examples/requirements/master",
+            [
+                Email("betatim@gmail.com"),
+                Gitter("jupyterhub/mybinder.org-deploy"),
+            ],
+            host="https://ovh.mybinder.org",
+        ),
+        # IsUp("https://httpbin.org/status/404", [Email("betatim@gmail.com")]),
     ]
+
     signals = []
     for check in checks:
         IOLoop.current().add_callback(check.check)
@@ -261,7 +308,7 @@ async def main(once=False):
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.DEBUG,
-        datefmt="%X",
+        datefmt="%X %Z",
         format="%(asctime)s %(levelname)-8s %(message)s",
     )
 
