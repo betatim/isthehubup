@@ -15,12 +15,12 @@ from tornado.httpclient import AsyncHTTPClient
 from tornado.httpclient import HTTPClientError
 
 
-MG_API_KEY = os.getenv("MG_API_KEY", "None")
+MG_API_KEY = os.getenv("MG_API_KEY", None)
 if MG_API_KEY is None:
     print("Set the MG_API_KEY environment variable.")
     sys.exit(1)
 
-GITTER_API_KEY = os.getenv("GITTER_API_KEY", "None")
+GITTER_API_KEY = os.getenv("GITTER_API_KEY", None)
 if GITTER_API_KEY is None:
     print("Set the GITTER_API_KEY environment variable.")
     sys.exit(1)
