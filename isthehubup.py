@@ -181,7 +181,7 @@ class Gitter:
                 "Accept": "application/json",
                 "Authorization": f"Bearer {GITTER_API_KEY}",
             }
-            self.client.fetch(
+            await self.client.fetch(
                 f"https://api.gitter.im/v1/rooms/{channel_id}/chatMessages",
                 method="POST",
                 body=json.dumps(
@@ -191,7 +191,7 @@ class Gitter:
                 ),
                 headers=headers,
             )
-            self.client.fetch(
+            await self.client.fetch(
                 f"https://api.gitter.im/v1/rooms/{channel_id}/chatMessages",
                 method="POST",
                 body=json.dumps({"text": f"{message}"}),
