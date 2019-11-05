@@ -220,8 +220,8 @@ class Email:
                 "sender": "Is the Hub Up <ishubup@mg.wildtreetech.com>",
                 "to": self.to,
                 "subject": "%s is down" % url,
-                "text": "%s\n\n%s"
-                % (now.strftime("%d %B %Y at %X UTC"), message),
+                "text": "%s\n\nTrying %s\n\n%s"
+                % (now.strftime("%d %B %Y at %X UTC"), url, message),
             }
 
             await self.client.fetch(
@@ -290,11 +290,19 @@ async def main(once=False):
             "gh/binder-examples/requirements/master",
             [
                 Email("betatim@gmail.com"),
-                #Gitter("jupyterhub/mybinder.org-deploy"),
+                # Gitter("jupyterhub/mybinder.org-deploy"),
             ],
             host="https://ovh.mybinder.org",
         ),
-        # IsUp("https://httpbin.org/status/404", [Email("betatim@gmail.com")]),
+        BinderBuilds(
+            "gh/binder-examples/requirements/master",
+            [
+                Email("betatim@gmail.com"),
+                Gitter("jupyterhub/mybinder.org-deploy"),
+            ],
+            host="https://gesis.mybinder.org",
+        ),
+        # IsUp("https://httpbin.org/status/504", [Email("betatim@gmail.com")]),
     ]
 
     signals = []
