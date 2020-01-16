@@ -302,6 +302,14 @@ async def main(once=False):
             ],
             host="https://gesis.mybinder.org",
         ),
+        BinderBuilds(
+            "gh/binder-examples/requirements/master",
+            [
+                Email("betatim@gmail.com"),
+                Gitter("jupyterhub/mybinder.org-deploy"),
+            ],
+            host="https://turing.mybinder.org",
+        ),
         # IsUp("https://httpbin.org/status/504", [Email("betatim@gmail.com")]),
     ]
 
