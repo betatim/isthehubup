@@ -70,6 +70,7 @@ class BinderBuilds:
     ):
         self.every = every
         self.reporters = reporters
+        self.host = host
         self.url = host + "/build/" + repo_spec
 
         self.done = Event()
@@ -102,35 +103,50 @@ class BinderBuilds:
             idx = self._body.find(b"\n\n")
 
     async def check(self):
-        logging.info("Does %s launch?" % self.url)
+        skip = False
         try:
-            r = await self.client.fetch(
-                self.url,
-                raise_error=False,
-                streaming_callback=self._buffer,
-                request_timeout=60 * 5,
-            )
+            response = await self.client.fetch(self.host + "/health", request_timeout=5)
+            health = json.loads(response.body)
+            for check in health["checks"]:
+                if "quota" in check and check["quota"] == 0:
+                    # skip a host if it has pod quota as 0
+                    # this means it dont accept new launches, probably because it is in maintenance
+                    skip = True
+        except Exception as e:
+            logging.warning(f"Pod quota check of {self.host} failed with {e}")
 
-        except HTTPClientError as e:
-            logging.warning(f"Launching {self.url} failed with a {e}.")
-
+        if skip:
+            logging.info(f"Skipping {self.host}, it has pod quota as 0.")
         else:
-            if r.code >= 400 or self._phase != "ready":
-                logging.warning(
-                    f"Launching {self.url} failed with a {r.code} exception."
+            logging.info("Does %s launch?" % self.url)
+            try:
+                r = await self.client.fetch(
+                    self.url,
+                    raise_error=False,
+                    streaming_callback=self._buffer,
+                    request_timeout=60 * 5,
                 )
 
-                reports = [
-                    reporter.report(self.url, self._log_lines)
-                    for reporter in self.reporters
-                ]
-
-                await asyncio.gather(*reports)
+            except HTTPClientError as e:
+                logging.warning(f"Launching {self.url} failed with a {e}.")
 
             else:
-                logging.info(f"Launching {self.url} took {r.request_time}s.")
+                if r.code >= 400 or self._phase != "ready":
+                    logging.warning(
+                        f"Launching {self.url} failed with a {r.code} exception."
+                    )
 
-        self._reset()
+                    reports = [
+                        reporter.report(self.url, self._log_lines)
+                        for reporter in self.reporters
+                    ]
+
+                    await asyncio.gather(*reports)
+
+                else:
+                    logging.info(f"Launching {self.url} took {r.request_time}s.")
+
+            self._reset()
         # wait till we are done to schedule the next call
         if self.every is not None:
             IOLoop.current().call_later(self.every, self.check)
@@ -294,14 +310,14 @@ async def main(once=False):
             ],
             host="https://ovh.mybinder.org",
         ),
-        # BinderBuilds(
-        #     "gh/binder-examples/requirements/master",
-        #     [
-        #         Email("betatim@gmail.com"),
-        #         Gitter("jupyterhub/mybinder.org-deploy"),
-        #     ],
-        #     host="https://gesis.mybinder.org",
-        # ),
+        BinderBuilds(
+            "gh/binder-examples/requirements/master",
+            [
+                Email("betatim@gmail.com"),
+                Gitter("jupyterhub/mybinder.org-deploy"),
+            ],
+            host="https://gesis.mybinder.org",
+        ),
         BinderBuilds(
             "gh/binder-examples/requirements/master",
             [
