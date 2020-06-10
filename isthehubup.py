@@ -294,14 +294,14 @@ async def main(once=False):
             ],
             host="https://ovh.mybinder.org",
         ),
-        # BinderBuilds(
-        #     "gh/binder-examples/requirements/master",
-        #     [
-        #         Email("betatim@gmail.com"),
-        #         Gitter("jupyterhub/mybinder.org-deploy"),
-        #     ],
-        #     host="https://gesis.mybinder.org",
-        # ),
+        BinderBuilds(
+            "gh/binder-examples/requirements/master",
+            [
+                Email("betatim@gmail.com"),
+                Gitter("jupyterhub/mybinder.org-deploy"),
+            ],
+            host="https://gesis.mybinder.org",
+        ),
         BinderBuilds(
             "gh/binder-examples/requirements/master",
             [
