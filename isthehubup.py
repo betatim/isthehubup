@@ -70,6 +70,7 @@ class BinderBuilds:
     ):
         self.every = every
         self.reporters = reporters
+        self.host = host
         self.url = host + "/build/" + repo_spec
 
         self.done = Event()
@@ -102,6 +103,18 @@ class BinderBuilds:
             idx = self._body.find(b"\n\n")
 
     async def check(self):
+        skip = False
+        try:
+            response = await self.client.fetch(self.host + "/health", request_timeout=5)
+            health = json.loads(response.body)
+            for check in health["checks"]:
+                if "quota" in check and check["quota"] == 0:
+                    # skip a host if it has pod quota as 0
+                    # this means it dont accept new launches, probably because it is in maintenance
+                    skip = True
+        except Exception as e:
+            logging.warning(f"Pod quota check of {self.host} failed with {e}")
+
         logging.info("Does %s launch?" % self.url)
         try:
             r = await self.client.fetch(
