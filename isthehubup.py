@@ -115,35 +115,38 @@ class BinderBuilds:
         except Exception as e:
             logging.warning(f"Pod quota check of {self.host} failed with {e}")
 
-        logging.info("Does %s launch?" % self.url)
-        try:
-            r = await self.client.fetch(
-                self.url,
-                raise_error=False,
-                streaming_callback=self._buffer,
-                request_timeout=60 * 5,
-            )
-
-        except HTTPClientError as e:
-            logging.warning(f"Launching {self.url} failed with a {e}.")
-
+        if skip:
+            logging.info(f"Skipping {self.host}, it has pod quota as 0.")
         else:
-            if r.code >= 400 or self._phase != "ready":
-                logging.warning(
-                    f"Launching {self.url} failed with a {r.code} exception."
+            logging.info("Does %s launch?" % self.url)
+            try:
+                r = await self.client.fetch(
+                    self.url,
+                    raise_error=False,
+                    streaming_callback=self._buffer,
+                    request_timeout=60 * 5,
                 )
 
-                reports = [
-                    reporter.report(self.url, self._log_lines)
-                    for reporter in self.reporters
-                ]
-
-                await asyncio.gather(*reports)
+            except HTTPClientError as e:
+                logging.warning(f"Launching {self.url} failed with a {e}.")
 
             else:
-                logging.info(f"Launching {self.url} took {r.request_time}s.")
+                if r.code >= 400 or self._phase != "ready":
+                    logging.warning(
+                        f"Launching {self.url} failed with a {r.code} exception."
+                    )
 
-        self._reset()
+                    reports = [
+                        reporter.report(self.url, self._log_lines)
+                        for reporter in self.reporters
+                    ]
+
+                    await asyncio.gather(*reports)
+
+                else:
+                    logging.info(f"Launching {self.url} took {r.request_time}s.")
+
+            self._reset()
         # wait till we are done to schedule the next call
         if self.every is not None:
             IOLoop.current().call_later(self.every, self.check)
